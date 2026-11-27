@@ -1,10 +1,117 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>stay tuned.</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #243347; background: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .world-clocks { max-width: 1000px; margin: 0 auto; padding: 48px 24px 32px; }
+    .clocks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; margin: 0; padding: 0; list-style: none; }
+    .clock { text-align: center; min-width: 0; }
+    .dial { display: block; width: min(100%, 168px); height: auto; margin: 0 auto 18px; }
+    .rim { fill: #f0f2f4; stroke: #b8c0c8; stroke-width: 1; }
+    .face { fill: #fff; stroke: #d8dde2; stroke-width: 1; }
+    .tick { stroke: #a9b2bd; stroke-width: 1; }
+    .tick.major { stroke: #46566b; stroke-width: 2; }
+    .hour-hand, .minute-hand { stroke: #243347; stroke-linecap: round; }
+    .hour-hand { stroke-width: 5; }
+    .minute-hand { stroke-width: 3; }
+    .second-hand { stroke: #b94141; stroke-width: 1.5; }
+    .hub { fill: #b94141; }
+    .clock h2 { font-size: 1rem; font-weight: 500; margin: 0 0 8px; }
+    .city-en { display: block; margin-top: 4px; font-size: .875rem; color: #617084; }
+    .time { display: block; font-size: 1.25rem; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+    .date { min-height: 1.5em; margin: 6px 0 0; font-size: .875rem; color: #617084; }
+    .date-en { margin-top: 3px; }
+    .timezone { margin: 4px 0 0; font-size: .8125rem; color: #617084; font-variant-numeric: tabular-nums; }
+    main { text-align: center; padding: 68px 24px; border-top: 1px solid #e6e9ed; max-width: 952px; margin: 0 auto; }
+    main p { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 400; color: #243347; }
+    noscript p { text-align: center; padding: 0 24px; color: #617084; }
+    @media (max-width: 600px) {
+      .world-clocks { padding: 32px 20px; }
+      .clocks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 20px; }
+      .dial { width: min(100%, 140px); margin-bottom: 12px; }
+      main { margin: 0 20px; padding: 44px 12px; }
+    }
+  </style>
 </head>
 <body>
-  stay tuned.
+  <section class="world-clocks" aria-label="世界时间 / World time">
+    <ul class="clocks" id="clocks"></ul>
+  </section>
+  <noscript><p>请启用 JavaScript 查看世界时间。<br><span lang="en">Enable JavaScript to view world time.</span></p></noscript>
+  <main><p>stay tuned.</p></main>
+  <script>
+    const cities = [
+      { name: '北京', englishName: 'Beijing', zone: 'Asia/Shanghai' },
+      { name: '伦敦', englishName: 'London', zone: 'Europe/London' },
+      { name: '纽约', englishName: 'New York', zone: 'America/New_York' },
+      { name: '东京', englishName: 'Tokyo', zone: 'Asia/Tokyo' }
+    ];
+
+    const clocks = cities.map(({ name, englishName, zone }, index) => {
+      const clock = document.createElement('li');
+      clock.className = 'clock';
+      clock.innerHTML = `
+        <svg class="dial" viewBox="0 0 180 180" aria-hidden="true" focusable="false">
+          <circle class="rim" cx="90" cy="90" r="88"/>
+          <circle class="face" cx="90" cy="90" r="82"/>
+          ${Array.from({ length: 60 }, (_, tick) => `<line class="tick${tick % 5 === 0 ? ' major' : ''}" x1="90" y1="${tick % 5 === 0 ? 17 : 20}" x2="90" y2="${tick % 5 === 0 ? 26 : 24}" transform="rotate(${tick * 6} 90 90)"/>`).join('')}
+          <line class="hour-hand" x1="90" y1="96" x2="90" y2="49"/>
+          <line class="minute-hand" x1="90" y1="99" x2="90" y2="31"/>
+          <line class="second-hand" x1="90" y1="104" x2="90" y2="26"/>
+          <circle class="hub" cx="90" cy="90" r="3.5"/>
+        </svg>
+        <h2 id="city-${index}">${name}<span class="city-en" lang="en">${englishName}</span></h2>
+        <time class="time" aria-labelledby="city-${index}">--:--:--</time>
+        <p class="date"></p>
+        <p class="date date-en" lang="en"></p>
+        <p class="timezone"></p>`;
+      document.getElementById('clocks').append(clock);
+      return {
+        clock,
+        time: clock.querySelector('.time'),
+        date: clock.querySelector('.date'),
+        englishDate: clock.querySelector('.date-en'),
+        timezone: clock.querySelector('.timezone'),
+        hands: ['hour', 'minute', 'second'].map(hand => clock.querySelector(`.${hand}-hand`)),
+        formatter: new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'shortOffset' }),
+        dateFormatter: new Intl.DateTimeFormat('zh-CN', { timeZone: zone, month: 'long', day: 'numeric', weekday: 'short' }),
+        englishDateFormatter: new Intl.DateTimeFormat('en-GB', { timeZone: zone, month: 'short', day: 'numeric', weekday: 'short' })
+      };
+    });
+
+    function updateClocks(now = new Date()) {
+      for (const { time, date, englishDate, timezone, hands, formatter, dateFormatter, englishDateFormatter } of clocks) {
+        const parts = Object.fromEntries(formatter.formatToParts(now).map(part => [part.type, part.value]));
+        const hours = Number(parts.hour);
+        const minutes = Number(parts.minute);
+        const seconds = Number(parts.second);
+        const angles = [(hours % 12) * 30 + minutes * .5 + seconds / 120, minutes * 6 + seconds * .1, seconds * 6];
+        hands.forEach((hand, index) => hand.setAttribute('transform', `rotate(${angles[index]} 90 90)`));
+        time.textContent = `${parts.hour}:${parts.minute}:${parts.second}`;
+        time.dateTime = now.toISOString();
+        const dateText = dateFormatter.format(now);
+        if (date.textContent !== dateText) date.textContent = dateText;
+        const englishDateText = englishDateFormatter.format(now);
+        if (englishDate.textContent !== englishDateText) englishDate.textContent = englishDateText;
+        const offsetText = parts.timeZoneName.replace('GMT', 'UTC');
+        if (timezone.textContent !== offsetText) timezone.textContent = offsetText;
+      }
+    }
+
+    let timer;
+    function tick() {
+      clearTimeout(timer);
+      updateClocks();
+      if (!document.hidden) timer = setTimeout(tick, 1000 - Date.now() % 1000);
+    }
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('pageshow', tick);
+    tick();
+  </script>
 </body>
 </html>
